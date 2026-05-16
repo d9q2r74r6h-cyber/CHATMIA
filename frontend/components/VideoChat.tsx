@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import io from 'socket.io-client';
 import Peer from 'simple-peer';
+import { supabase } from '@/lib/supabase';
 
 type Country = {
   code: string;
@@ -27,6 +28,30 @@ export default function VideoChat({
   country,
   onBack,
 }: Props) {
+  const reportUser = async () => {
+    const reason = prompt(
+      '¿Por qué deseas reportar este usuario?'
+    );
+  
+    if (!reason) return;
+  
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+  
+    await supabase.from('reports').insert({
+      reporter_email: user?.email || 'unknown',
+      reason,
+    });
+  
+    alert(
+      'Reporte enviado. Gracias por ayudar a mantener ChatMia seguro.'
+    );
+  };
+
+  
+
+
   const localVideo = useRef<HTMLVideoElement>(null);
   const remoteVideo = useRef<HTMLVideoElement>(null);
 
@@ -467,15 +492,26 @@ export default function VideoChat({
       </section>
 
       <footer className="h-20 border-t border-white/10 bg-black/70 backdrop-blur-xl flex items-center justify-center">
-        <motion.button
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.96 }}
-          onClick={next}
-          className="px-10 py-3 rounded-full bg-white text-black font-semibold shadow-xl"
-        >
-          Siguiente
-        </motion.button>
-      </footer>
+  <div className="flex gap-3">
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.96 }}
+      onClick={next}
+      className="px-10 py-3 rounded-full bg-white text-black font-semibold shadow-xl"
+    >
+      Siguiente
+    </motion.button>
+
+    <motion.button
+      whileHover={{ scale: 1.05 }}
+      whileTap={{ scale: 0.96 }}
+      onClick={reportUser}
+      className="px-6 py-3 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 font-semibold"
+    >
+      Reportar
+    </motion.button>
+  </div>
+</footer>
     </main>
   );
 }
