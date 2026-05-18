@@ -57,6 +57,19 @@ export default function Page() {
 
     setUser(user);
 
+    const { data: bannedUser } = await supabase
+  .from('banned_users')
+  .select('*')
+  .eq('email', user.email)
+  .maybeSingle();
+
+if (bannedUser) {
+  alert('Tu cuenta ha sido suspendida de ChatMia.');
+  await supabase.auth.signOut();
+  window.location.href = '/auth';
+  return;
+}
+
     setCheckingAuth(false);
   };
 
@@ -89,23 +102,32 @@ export default function Page() {
   return (
     <main className="min-h-screen bg-[#070709] text-white flex items-center justify-center px-6 relative overflow-hidden">
       <div className="absolute top-5 right-5 flex items-center gap-3">
-        <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-2 backdrop-blur-xl">
-          <div className="text-xs text-white/40">
-            Conectado como
-          </div>
+  <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-2 backdrop-blur-xl">
+    <div className="text-xs text-white/40">
+      Conectado como
+    </div>
 
-          <div className="text-sm font-medium">
-            {user?.email}
-          </div>
-        </div>
+    <div className="text-sm font-medium">
+      {user?.email}
+    </div>
+  </div>
 
-        <button
-          onClick={logout}
-          className="h-11 px-5 rounded-2xl bg-white text-black font-medium hover:scale-105 active:scale-95 transition"
-        >
-          Salir
-        </button>
-      </div>
+  <button
+    onClick={() => {
+      window.location.href = '/profile';
+    }}
+    className="h-11 px-5 rounded-2xl bg-white/10 border border-white/10 text-white font-medium hover:bg-white/20 transition"
+  >
+    Perfil
+  </button>
+
+  <button
+    onClick={logout}
+    className="h-11 px-5 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-300 font-medium hover:bg-red-500/30 transition"
+  >
+    Salir
+  </button>
+</div>
 
       <div className="w-full max-w-xl">
         <div className="text-center mb-10">

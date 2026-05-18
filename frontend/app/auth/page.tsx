@@ -38,7 +38,22 @@ export default function AuthPage() {
           await supabase.auth.signUp({
             email,
             password,
+          }
+        
+        );
+
+        if (data?.user) {
+          await supabase.from('profiles').insert({
+            id: data.user.id,
+            email,
+            username: email.split('@')[0],
+            avatar_url: '',
+            bio: '',
+            interests: [],
+            country: '',
           });
+        }
+          
 
         if (error) {
           alert(error.message);
