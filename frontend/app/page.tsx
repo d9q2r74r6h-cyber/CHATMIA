@@ -101,32 +101,43 @@ if (bannedUser) {
 
   return (
     <main className="min-h-screen bg-[#070709] text-white flex items-center justify-center px-6 relative overflow-hidden">
-      <div className="absolute top-5 right-5 flex items-center gap-3">
-  <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-2 backdrop-blur-xl">
+      
+      <div className="fixed top-4 left-4 right-4 z-50 flex flex-col md:flex-row md:items-center md:justify-end gap-3">
+  <div className="bg-white/5 border border-white/10 rounded-2xl px-4 py-2 backdrop-blur-xl md:max-w-sm overflow-hidden">
+  <button
+  onClick={() => {
+    window.location.href = '/profile';
+  }}
+  className="w-full h-12 rounded-2xl bg-blue-500 text-white font-semibold hover:scale-[1.02] active:scale-[0.98] transition"
+>
+  Editar mi perfil
+</button>
     <div className="text-xs text-white/40">
       Conectado como
     </div>
 
-    <div className="text-sm font-medium">
+    <div className="text-sm font-medium truncate">
       {user?.email}
     </div>
   </div>
 
-  <button
-    onClick={() => {
-      window.location.href = '/profile';
-    }}
-    className="h-11 px-5 rounded-2xl bg-white/10 border border-white/10 text-white font-medium hover:bg-white/20 transition"
-  >
-    Perfil
-  </button>
+  <div className="flex gap-3">
+    <button
+      onClick={() => {
+        window.location.href = '/profile';
+      }}
+      className="h-11 px-5 rounded-2xl bg-blue-500 text-white font-semibold hover:scale-105 active:scale-95 transition"
+    >
+      Perfil
+    </button>
 
-  <button
-    onClick={logout}
-    className="h-11 px-5 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-300 font-medium hover:bg-red-500/30 transition"
-  >
-    Salir
-  </button>
+    <button
+      onClick={logout}
+      className="h-11 px-5 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-300 font-medium hover:bg-red-500/30 transition"
+    >
+      Salir
+    </button>
+  </div>
 </div>
 
       <div className="w-full max-w-xl">
