@@ -11,10 +11,19 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-const supabase = createClient(
-  process.env.SUPABASE_URL,
+let supabase = null;
+
+if (
+  process.env.SUPABASE_URL &&
   process.env.SUPABASE_SERVICE_ROLE_KEY
-);
+) {
+  supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+} else {
+  console.warn('Supabase backend variables missing. Active chats disabled.');
+}
 
 app.get('/', (req, res) => {
   res.send('ChatMia server running');
@@ -72,13 +81,15 @@ async function closeActiveChat(socketId) {
 
   if (!chatId) return;
 
-  await supabase
-    .from('active_chats')
-    .update({
-      active: false,
-      ended_at: new Date().toISOString(),
-    })
-    .eq('chat_id', chatId);
+  if (supabase) {
+    await supabase
+      .from('active_chats')
+      .update({
+        active: false,
+        ended_at: new Date().toISOString(),
+      })
+      .eq('chat_id', chatId);
+  }
 
   const partnerId = partners.get(socketId);
 
