@@ -136,36 +136,25 @@ io.on('connection', (socket) => {
       .from('active_chats')
       .insert({
         chat_id: chatId,
-    
         user1_socket: socket.id,
         user2_socket: partnerId,
-    
-        user1_email:
-          users.get(socket.id)?.email || null,
-    
-        user2_email:
-          users.get(partnerId)?.email || null,
-    
-        user1_country:
-          users.get(socket.id)?.country || null,
-    
-        user2_country:
-          users.get(partnerId)?.country || null,
-    
-        active: true,
-      });
-    
+        user1_email: users.get(socket.id)?.email || null,
+        user2_email: users.get(partnerId)?.email || null,
+    user1_country:
+      users.get(socket.id)?.country || null,
+
+    user2_country:
+      users.get(partnerId)?.country || null,
+
+    active: true,
+  })
+  .then(({ error }) => {
     if (error) {
-      console.error(
-        'ACTIVE_CHAT INSERT ERROR:',
-        error
-      );
+      console.error('ACTIVE_CHAT INSERT ERROR:', error);
     } else {
-      console.log(
-        'ACTIVE_CHAT CREATED:',
-        chatId
-      );
+      console.log('ACTIVE_CHAT CREATED:', chatId);
     }
+  });
       console.log('MATCHED:', socket.id, partnerId);
 
       socket.emit('matched', {
