@@ -194,53 +194,15 @@ export default function AdminPage() {
                 </div>
               </div>
             </section>
-
             <section>
-              <h2 className="text-xl font-semibold mb-4">
-                Conversaciones activas
-              </h2>
+  <h2 className="text-xl font-semibold mb-4">
+    Conversaciones activas
+  </h2>
 
-              {activeOnly.length === 0 ? (
-                <div className="text-white/50">
-                  No hay conversaciones activas.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {activeOnly.map((chat) => (
-                    <div
-                      key={chat.id}
-                      className="bg-green-500/10 border border-green-500/20 rounded-2xl p-5"
-                    >
-                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                        <div>
-                          <div className="font-semibold text-green-300">
-                            Chat activo
-                          </div>
-
-                          <div className="text-sm text-white/70 mt-1">
-                            {chat.user1_email || 'Usuario 1'} ↔{' '}
-                            {chat.user2_email || 'Usuario 2'}
-                          </div>
-
-                          <div className="text-xs text-white/40 mt-1">
-                            {chat.user1_country || 'Sin país'} /{' '}
-                            {chat.user2_country || 'Sin país'}
-                          </div>
-                        </div>
-
-                        <div className="text-sm text-white/60">
-                          {chat.message_count} mensajes
-                        </div>
-                      </div>
-
-                      <div className="mt-3 text-xs text-white/30">
-                        Inicio: {new Date(chat.started_at).toLocaleString()}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+  <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-2xl p-5 text-yellow-200">
+    El monitoreo de conversaciones activas está pausado temporalmente para mantener estable el matchmaking.
+  </div>
+</section>
 
             <section>
               <h2 className="text-xl font-semibold mb-4">

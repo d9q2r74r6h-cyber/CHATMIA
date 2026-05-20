@@ -29,6 +29,279 @@ export default function VideoChat({
   country,
   onBack,
 }: Props) {
+  const hasTrackedConnection = useRef(false);
+
+  const localVideo = useRef<HTMLVideoElement>(null);
+  const remoteVideo = useRef<HTMLVideoElement>(null);
+
+  const socketRef = useRef<any>(null);
+  const peerRef = useRef<Peer.Instance | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const matchSound = useRef<HTMLAudioElement | null>(null);
+  const messageSound = useRef<HTMLAudioElement | null>(null);
+  const typingTimeout = useRef<any>(null);
+
+  const [online, setOnline] = useState(0);
+  const [connecting, setConnecting] = useState(true);
+  const [connected, setConnected] = useState(false);
+
+  const [message, setMessage] = useState('');
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [typing, setTyping] = useState(false);
+
+  const [micEnabled, setMicEnabled] = useState(true);
+  const [cameraEnabled, setCameraEnabled] = useState(true);
+
+  useEffect(() => {
+    const checkBan = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user?.email) return false;
+
+      const { data } = await supabase
+        .from('banned_users')
+        .select('*')
+        .eq('email', user.email)
+        .maybeSingle();
+
+      if (data) {
+        alert('Tu cuenta ha sido suspendida de ChatMia.');
+        window.location.href = '/auth';
+        return true;
+      }
+
+      return false;
+    };
+
+    (async () => {
+      const banned = await checkBan();
+
+      if (banned) return;
+
+      matchSound.current = new Audio('/sounds/match.mp3');
+      messageSound.current = new Audio('/sounds/message.mp3');
+
+      const socket = io(
+        process.env.NEXT_PUBLIC_SOCKET_URL ||
+          'http://localhost:4000',
+        {
+          transports: ['websocket'],
+        }
+      );
+
+      socketRef.current = socket;
+
+      socket.on('online-count', (count: number) => {
+        setOnline(count);
+      });
+
+      navigator.mediaDevices
+        .getUserMedia({
+          video: {
+            facingMode: 'user',
+          },
+          audio: true,
+        })
+        .then((stream) => {
+          streamRef.current = stream;
+
+          if (localVideo.current) {
+            localVideo.current.srcObject = stream;
+            localVideo.current.play().catch(console.error);
+          }
+
+          socket.emit('find-partner', {
+            gender,
+            country,
+          });
+
+          socket.on('matched', ({ partnerId, initiator }) => {
+            setConnecting(false);
+            peerRef.current?.destroy();
+
+            const peer = new Peer({
+              initiator,
+              trickle: false,
+              stream,
+              config: {
+                iceServers: [
+                  {
+                    urls: 'stun:global.stun.twilio.com:3478',
+                  },
+                  {
+                    urls: 'turn:global.relay.metered.ca:80',
+                    username: 'admchatmia@outlook.com',
+                    credential: 'Osorno69#',
+                  },
+                ],
+              },
+            });
+
+            peer.on('signal', (signal) => {
+              socket.emit('signal', {
+                to: partnerId,
+                signal,
+              });
+            });
+
+            peer.on('connect', () => {
+              if (!hasTrackedConnection.current) {
+                hasTrackedConnection.current = true;
+
+                trackEvent('chat_connected', {
+                  country: country.name,
+                });
+              }
+
+              matchSound.current?.play().catch(() => {});
+              setConnecting(false);
+              setConnected(true);
+            });
+
+            peer.on('stream', (remoteStream) => {
+              if (remoteVideo.current) {
+                remoteVideo.current.srcObject = remoteStream;
+                remoteVideo.current.play().catch(console.error);
+              }
+
+              setConnecting(false);
+              setConnected(true);
+            });
+
+            peer.on('error', () => {
+              setConnecting(false);
+              setConnected(false);
+            });
+
+            peer.on('close', () => {
+              setConnected(false);
+            });
+
+            peerRef.current = peer;
+          });
+
+          socket.on('signal', ({ signal }) => {
+            peerRef.current?.signal(signal);
+          });
+
+          socket.on('chat-message', ({ message }) => {
+            messageSound.current?.play().catch(() => {});
+            setTyping(false);
+
+            setMessages((prev) => [
+              ...prev,
+              {
+                text: message,
+                mine: false,
+              },
+            ]);
+          });
+
+          socket.on('typing', () => {
+            setTyping(true);
+
+            clearTimeout(typingTimeout.current);
+
+            typingTimeout.current = setTimeout(() => {
+              setTyping(false);
+            }, 1500);
+          });
+
+          socket.on('partner-left', () => {
+            hasTrackedConnection.current = false;
+
+            cleanupRemote();
+
+            setTyping(false);
+            setMessages([]);
+            setConnected(false);
+            setConnecting(true);
+
+            socket.emit('find-partner', {
+              gender,
+              country,
+            });
+          });
+        })
+        .catch(() => {
+          alert(
+            'Debes permitir cámara y micrófono para usar ChatMia.'
+          );
+
+          setConnecting(false);
+          setConnected(false);
+        });
+    })();
+
+    return () => {
+      cleanupAll();
+      clearTimeout(typingTimeout.current);
+      socketRef.current?.disconnect();
+    };
+  }, [gender, country]);
+
+  const cleanupRemote = () => {
+    peerRef.current?.destroy();
+    peerRef.current = null;
+
+    if (remoteVideo.current) {
+      remoteVideo.current.srcObject = null;
+    }
+  };
+
+  const cleanupAll = () => {
+    cleanupRemote();
+
+    streamRef.current?.getTracks().forEach((track) => {
+      track.stop();
+    });
+
+    streamRef.current = null;
+  };
+
+  const next = () => {
+    hasTrackedConnection.current = false;
+
+    trackEvent('next_clicked');
+
+    cleanupRemote();
+
+    setTyping(false);
+    setMessages([]);
+    setConnected(false);
+    setConnecting(true);
+
+    socketRef.current?.emit('next');
+
+    setTimeout(() => {
+      socketRef.current?.emit('find-partner', {
+        gender,
+        country,
+      });
+    }, 300);
+  };
+
+  const toggleMic = () => {
+    const audioTrack = streamRef.current?.getAudioTracks()[0];
+
+    if (!audioTrack) return;
+
+    audioTrack.enabled = !audioTrack.enabled;
+    setMicEnabled(audioTrack.enabled);
+  };
+
+  const toggleCamera = () => {
+    const videoTrack = streamRef.current?.getVideoTracks()[0];
+
+    if (!videoTrack) return;
+
+    videoTrack.enabled = !videoTrack.enabled;
+    setCameraEnabled(videoTrack.enabled);
+  };
+
   const reportUser = async () => {
     const reason = prompt(
       '¿Por qué deseas reportar este usuario?'
@@ -54,309 +327,6 @@ export default function VideoChat({
     );
   };
 
-  const hasTrackedConnection = useRef(false);
-
-  const localVideo = useRef<HTMLVideoElement>(null);
-  const remoteVideo = useRef<HTMLVideoElement>(null);
-
-  const socketRef = useRef<any>(null);
-  const peerRef = useRef<Peer.Instance | null>(null);
-  const streamRef = useRef<MediaStream | null>(null);
-
-  const matchSound = useRef<HTMLAudioElement | null>(null);
-  const messageSound = useRef<HTMLAudioElement | null>(null);
-  const typingTimeout = useRef<any>(null);
-
-  const [online, setOnline] = useState(0);
-  const [connecting, setConnecting] = useState(true);
-  const [connected, setConnected] = useState(false);
-
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [typing, setTyping] = useState(false);
-
-  useEffect(() => {
-    const checkBan = async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-
-      if (!user?.email) return false;
-
-      const { data } = await supabase
-        .from('banned_users')
-        .select('*')
-        .eq('email', user.email)
-        .maybeSingle();
-
-      if (data) {
-        alert(
-          'Tu cuenta ha sido suspendida de ChatMia.'
-        );
-
-        window.location.href = '/auth';
-
-        return true;
-      }
-
-      return false;
-    };
-
-    (async () => {
-      const banned = await checkBan();
-
-      if (banned) return;
-
-      matchSound.current = new Audio('/sounds/match.mp3');
-      messageSound.current = new Audio('/sounds/message.mp3');
-
-      const socket = io(
-        process.env.NEXT_PUBLIC_SOCKET_URL ||
-          'http://localhost:4000',
-        {
-          transports: ['websocket'],
-        }
-      );
-
-      socketRef.current = socket;
-
-      socket.on(
-        'online-count',
-        (count: number) => {
-          setOnline(count);
-        }
-      );
-
-      navigator.mediaDevices
-  .getUserMedia({
-    video: {
-      facingMode: 'user',
-    },
-    audio: true,
-  })
-  .then((stream) => {
-    streamRef.current = stream;
-
-    if (localVideo.current) {
-      localVideo.current.srcObject = stream;
-      localVideo.current.play().catch(console.error);
-    }
-
-    socket.emit('find-partner', {
-      gender,
-      country,
-    });
-
-          socket.on(
-            'matched',
-            ({ partnerId, initiator }) => {
-              setConnecting(false);
-
-              peerRef.current?.destroy();
-
-              const peer = new Peer({
-                initiator,
-                trickle: false,
-                stream,
-                config: {
-                  iceServers: [
-                    {
-                      urls:
-                        'stun:global.stun.twilio.com:3478',
-                    },
-                    {
-                      urls:
-                        'turn:global.relay.metered.ca:80',
-                      username:
-                        'admchatmia@outlook.com',
-                      credential: 'Osorno69#',
-                    },
-                  ],
-                },
-              });
-
-              peer.on('signal', (signal) => {
-                socket.emit('signal', {
-                  to: partnerId,
-                  signal,
-                });
-              });
-
-              peer.on('connect', () => {
-                if (
-                  !hasTrackedConnection.current
-                ) {
-                  hasTrackedConnection.current = true;
-
-                  trackEvent('chat_connected', {
-                    country: country.name,
-                  });
-                }
-
-                matchSound.current
-                  ?.play()
-                  .catch(() => {});
-
-                setConnecting(false);
-                setConnected(true);
-              });
-
-              peer.on(
-                'stream',
-                (remoteStream) => {
-                  if (remoteVideo.current) {
-                    remoteVideo.current.srcObject =
-                      remoteStream;
-
-                    remoteVideo.current
-                      .play()
-                      .catch(console.error);
-                  }
-
-                  setConnecting(false);
-                  setConnected(true);
-                }
-              );
-
-              peer.on('error', () => {
-                setConnecting(false);
-                setConnected(false);
-              });
-
-              peer.on('close', () => {
-                setConnected(false);
-              });
-
-              peerRef.current = peer;
-            }
-          );
-
-          socket.on('signal', ({ signal }) => {
-            peerRef.current?.signal(signal);
-          });
-
-          socket.on(
-            'chat-message',
-            ({ message }) => {
-              messageSound.current
-                ?.play()
-                .catch(() => {});
-
-              setTyping(false);
-
-              setMessages((prev) => [
-                ...prev,
-                {
-                  text: message,
-                  mine: false,
-                },
-              ]);
-            }
-          );
-
-          socket.on('typing', () => {
-            setTyping(true);
-
-            clearTimeout(
-              typingTimeout.current
-            );
-
-            typingTimeout.current =
-              setTimeout(() => {
-                setTyping(false);
-              }, 1500);
-          });
-
-          socket.on('partner-left', () => {
-            hasTrackedConnection.current = false;
-
-            cleanupRemote();
-
-            setTyping(false);
-            setMessages([]);
-            setConnected(false);
-            setConnecting(true);
-
-            findPartner();
-          });
-        })
-        .catch(() => {
-          alert(
-            'Debes permitir cámara y micrófono para usar ChatMia.'
-          );
-
-          setConnecting(false);
-          setConnected(false);
-        });
-
-      return () => {
-        cleanupAll();
-
-        clearTimeout(
-          typingTimeout.current
-        );
-
-        socket.disconnect();
-      };
-    })();
-  }, [gender]);
-
-  const cleanupRemote = () => {
-    peerRef.current?.destroy();
-
-    peerRef.current = null;
-
-    if (remoteVideo.current) {
-      remoteVideo.current.srcObject = null;
-    }
-  };
-
-  const cleanupAll = () => {
-    
-    cleanupRemote();
-
-    streamRef.current
-      ?.getTracks()
-      .forEach((track) => {
-        track.stop();
-      });
-
-    streamRef.current = null;
-  };
-
-  const findPartner = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-  
-    findPartner();
-  };
-
-  const next = () => {
-    hasTrackedConnection.current = false;
-
-    trackEvent('next_clicked');
-
-    cleanupRemote();
-
-    setTyping(false);
-    setMessages([]);
-    setConnected(false);
-    setConnecting(true);
-
-    socketRef.current?.emit('next');
-
-    setTimeout(() => {
-      socketRef.current?.emit(
-        'find-partner',
-        {
-          gender,
-          country,
-        }
-      );
-    }, 300);
-  };
-
   const bannedWords = [
     'puta',
     'puto',
@@ -368,11 +338,8 @@ export default function VideoChat({
     'suicide',
   ];
 
-  const containsBannedWord = (
-    text: string
-  ) => {
-    const normalized =
-      text.toLowerCase();
+  const containsBannedWord = (text: string) => {
+    const normalized = text.toLowerCase();
 
     return bannedWords.some((word) =>
       normalized.includes(word)
@@ -380,37 +347,24 @@ export default function VideoChat({
   };
 
   const sendMessage = () => {
-    const cleanMessage =
-      message.trim();
+    const cleanMessage = message.trim();
 
     if (!cleanMessage) return;
 
     if (cleanMessage.length > 300) {
-      alert(
-        'El mensaje es demasiado largo.'
-      );
-
+      alert('El mensaje es demasiado largo.');
       return;
     }
 
-    if (
-      containsBannedWord(cleanMessage)
-    ) {
-      alert(
-        'Este mensaje no cumple las normas de ChatMia.'
-      );
-
+    if (containsBannedWord(cleanMessage)) {
+      alert('Este mensaje no cumple las normas de ChatMia.');
       setMessage('');
-
       return;
     }
 
-    socketRef.current?.emit(
-      'chat-message',
-      {
-        message: cleanMessage,
-      }
-    );
+    socketRef.current?.emit('chat-message', {
+      message: cleanMessage,
+    });
 
     setMessages((prev) => [
       ...prev,
@@ -433,27 +387,14 @@ export default function VideoChat({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            transition={{
-              duration: 0.25,
-            }}
+            transition={{ duration: 0.25 }}
             className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center"
           >
             <motion.div
-              initial={{
-                scale: 0.96,
-                opacity: 0,
-              }}
-              animate={{
-                scale: 1,
-                opacity: 1,
-              }}
-              exit={{
-                scale: 0.96,
-                opacity: 0,
-              }}
-              transition={{
-                duration: 0.25,
-              }}
+              initial={{ scale: 0.96, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ duration: 0.25 }}
               className="text-center"
             >
               <div className="text-xl font-semibold animate-pulse">
@@ -461,8 +402,7 @@ export default function VideoChat({
               </div>
 
               <div className="text-sm text-white/40 mt-2">
-                Conectando alrededor del
-                mundo
+                Conectando alrededor del mundo
               </div>
             </motion.div>
           </motion.div>
@@ -477,9 +417,7 @@ export default function VideoChat({
             </h1>
 
             <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-full px-3 py-1 text-xs">
-              <span className="text-base">
-                {country.flag}
-              </span>
+              <span className="text-base">{country.flag}</span>
 
               <span className="text-white/70">
                 {country.name}
@@ -509,9 +447,7 @@ export default function VideoChat({
                 : 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20'
             }`}
           >
-            {connected
-              ? 'Conectado'
-              : 'Buscando'}
+            {connected ? 'Conectado' : 'Buscando'}
           </div>
         </div>
       </header>
@@ -519,17 +455,9 @@ export default function VideoChat({
       <section className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-2 p-2 md:p-3">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <motion.div
-            initial={{
-              opacity: 0,
-              y: 18,
-            }}
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
-            transition={{
-              duration: 0.35,
-            }}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35 }}
             className="relative rounded-3xl overflow-hidden bg-neutral-900 border border-white/10 shadow-2xl"
           >
             <video
@@ -547,18 +475,9 @@ export default function VideoChat({
           </motion.div>
 
           <motion.div
-            initial={{
-              opacity: 0,
-              y: 18,
-            }}
-            animate={{
-              opacity: 1,
-              y: 0,
-            }}
-            transition={{
-              duration: 0.35,
-              delay: 0.08,
-            }}
+            initial={{ opacity: 0, y: 18 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.35, delay: 0.08 }}
             className="relative rounded-3xl overflow-hidden bg-neutral-900 border border-white/10 shadow-2xl"
           >
             <video
@@ -577,40 +496,20 @@ export default function VideoChat({
         </div>
 
         <motion.aside
-          initial={{
-            opacity: 0,
-            x: 18,
-          }}
-          animate={{
-            opacity: 1,
-            x: 0,
-          }}
-          transition={{
-            duration: 0.35,
-            delay: 0.12,
-          }}
+          initial={{ opacity: 0, x: 18 }}
+          animate={{ opacity: 1, x: 0 }}
+          transition={{ duration: 0.35, delay: 0.12 }}
           className="bg-white/[0.03] border border-white/10 rounded-3xl backdrop-blur-xl flex flex-col overflow-hidden"
         >
           <div className="p-4 border-b border-white/10">
-            <h2 className="font-medium">
-              Chat en vivo
-            </h2>
+            <h2 className="font-medium">Chat en vivo</h2>
 
             <AnimatePresence>
               {typing && (
                 <motion.div
-                  initial={{
-                    opacity: 0,
-                    y: -4,
-                  }}
-                  animate={{
-                    opacity: 1,
-                    y: 0,
-                  }}
-                  exit={{
-                    opacity: 0,
-                    y: -4,
-                  }}
+                  initial={{ opacity: 0, y: -4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -4 }}
                   className="text-xs text-white/40 mt-1"
                 >
                   Escribiendo...
@@ -621,37 +520,22 @@ export default function VideoChat({
 
           <div className="flex-1 overflow-y-auto p-4 space-y-3">
             <AnimatePresence initial={false}>
-              {messages.map(
-                (msg, index) => (
-                  <motion.div
-                    key={`${msg.text}-${index}`}
-                    initial={{
-                      opacity: 0,
-                      y: 8,
-                      scale: 0.98,
-                    }}
-                    animate={{
-                      opacity: 1,
-                      y: 0,
-                      scale: 1,
-                    }}
-                    exit={{
-                      opacity: 0,
-                      scale: 0.98,
-                    }}
-                    transition={{
-                      duration: 0.18,
-                    }}
-                    className={`max-w-[85%] px-4 py-2 rounded-2xl text-sm ${
-                      msg.mine
-                        ? 'ml-auto bg-white text-black'
-                        : 'bg-white/10 text-white'
-                    }`}
-                  >
-                    {msg.text}
-                  </motion.div>
-                )
-              )}
+              {messages.map((msg, index) => (
+                <motion.div
+                  key={`${msg.text}-${index}`}
+                  initial={{ opacity: 0, y: 8, scale: 0.98 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.98 }}
+                  transition={{ duration: 0.18 }}
+                  className={`max-w-[85%] px-4 py-2 rounded-2xl text-sm ${
+                    msg.mine
+                      ? 'ml-auto bg-white text-black'
+                      : 'bg-white/10 text-white'
+                  }`}
+                >
+                  {msg.text}
+                </motion.div>
+              ))}
             </AnimatePresence>
           </div>
 
@@ -659,18 +543,11 @@ export default function VideoChat({
             <input
               value={message}
               onChange={(e) => {
-                setMessage(
-                  e.target.value
-                );
-
-                socketRef.current?.emit(
-                  'typing'
-                );
+                setMessage(e.target.value);
+                socketRef.current?.emit('typing');
               }}
               onKeyDown={(e) => {
-                if (
-                  e.key === 'Enter'
-                ) {
+                if (e.key === 'Enter') {
                   sendMessage();
                 }
               }}
@@ -679,12 +556,8 @@ export default function VideoChat({
             />
 
             <motion.button
-              whileHover={{
-                scale: 1.04,
-              }}
-              whileTap={{
-                scale: 0.96,
-              }}
+              whileHover={{ scale: 1.04 }}
+              whileTap={{ scale: 0.96 }}
               onClick={sendMessage}
               className="px-5 rounded-2xl bg-white text-black font-medium"
             >
@@ -694,28 +567,38 @@ export default function VideoChat({
         </motion.aside>
       </section>
 
-      <footer className="h-20 border-t border-white/10 bg-black/70 backdrop-blur-xl flex items-center justify-center">
-        <div className="flex items-center gap-3">
+      <footer className="h-24 md:h-20 border-t border-white/10 bg-black/70 backdrop-blur-xl flex items-center justify-center px-3">
+        <div className="flex flex-wrap items-center justify-center gap-3">
           <motion.button
-            whileHover={{
-              scale: 1.05,
-            }}
-            whileTap={{
-              scale: 0.96,
-            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={toggleMic}
+            className="px-5 py-3 rounded-full bg-white/10 border border-white/10 text-white font-semibold"
+          >
+            {micEnabled ? 'Silenciar' : 'Activar mic'}
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.96 }}
+            onClick={toggleCamera}
+            className="px-5 py-3 rounded-full bg-white/10 border border-white/10 text-white font-semibold"
+          >
+            {cameraEnabled ? 'Apagar cámara' : 'Encender cámara'}
+          </motion.button>
+
+          <motion.button
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.96 }}
             onClick={next}
-            className="px-10 py-3 rounded-full bg-white text-black font-semibold shadow-xl"
+            className="px-8 py-3 rounded-full bg-white text-black font-semibold shadow-xl"
           >
             Siguiente
           </motion.button>
 
           <motion.button
-            whileHover={{
-              scale: 1.05,
-            }}
-            whileTap={{
-              scale: 0.96,
-            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.96 }}
             onClick={reportUser}
             className="px-6 py-3 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 font-semibold shadow-xl"
           >
