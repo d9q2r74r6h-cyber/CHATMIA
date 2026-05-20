@@ -84,6 +84,7 @@ io.on('connection', (socket) => {
       email: email || null,
       gender: gender || null,
       country: country?.name || country?.code || null,
+      flag: country?.flag || '',
     });
 
     removeWaiting(socket.id);

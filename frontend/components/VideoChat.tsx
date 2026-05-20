@@ -31,7 +31,6 @@ export default function VideoChat({ gender, country, onBack }: Props) {
   const localVideoDesktop = useRef<HTMLVideoElement>(null);
   const remoteVideoMobile = useRef<HTMLVideoElement>(null);
   const remoteVideoDesktop = useRef<HTMLVideoElement>(null);
-  const [partnerInfo, setPartnerInfo] = useState<any>(null);
 
   const socketRef = useRef<any>(null);
   const peerRef = useRef<Peer.Instance | null>(null);
@@ -52,6 +51,8 @@ export default function VideoChat({ gender, country, onBack }: Props) {
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
   const [cameraMode] = useState<'user' | 'environment'>('user');
+
+  const [partnerInfo, setPartnerInfo] = useState<any>(null);
 
   useEffect(() => {
     const checkBan = async () => {
@@ -131,7 +132,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
           });
 
           socket.on('matched', ({ partnerId, initiator, partner }) => {
-            setPartnerInfo(partner);
+            setPartnerInfo(partner || null);
             setConnecting(false);
             peerRef.current?.destroy();
 
@@ -220,6 +221,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
 
           socket.on('partner-left', () => {
             hasTrackedConnection.current = false;
+            setPartnerInfo(null);
             cleanupRemote();
 
             setTyping(false);
@@ -270,6 +272,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
 
   const next = () => {
     hasTrackedConnection.current = false;
+    setPartnerInfo(null);
 
     trackEvent('next_clicked');
 
@@ -331,21 +334,34 @@ export default function VideoChat({ gender, country, onBack }: Props) {
     alert('Reporte enviado. Gracias por ayudar a mantener ChatMia seguro.');
   };
 
-  const bannedWords = [
-    'puta',
-    'puto',
-    'mierda',
-    'maricon',
-    'maricón',
-    'nazi',
-    'kill',
-    'suicide',
-  ];
-
   const containsBannedWord = (text: string) => {
+    const bannedWords = [
+      'puta',
+      'puto',
+      'mierda',
+      'maricon',
+      'maricón',
+      'nazi',
+      'kill',
+      'suicide',
+    ];
+
     const normalized = text.toLowerCase();
 
     return bannedWords.some((word) => normalized.includes(word));
+  };
+
+  const getGenderIcon = (gender?: string) => {
+    switch (gender) {
+      case 'male':
+        return '👨';
+      case 'female':
+        return '👩';
+      case 'couple':
+        return '👩‍❤️‍👨';
+      default:
+        return '🧑';
+    }
   };
 
   const sendMessage = () => {
@@ -380,6 +396,14 @@ export default function VideoChat({ gender, country, onBack }: Props) {
 
     setMessage('');
   };
+
+  const partnerLabel = (
+    <>
+      {partnerInfo?.flag || '🌎'}{' '}
+      {getGenderIcon(partnerInfo?.gender)}{' '}
+      {partnerInfo?.country || 'Sin país'}
+    </>
+  );
 
   return (
     <main className="relative h-[100dvh] bg-black text-white flex flex-col overflow-hidden">
@@ -424,7 +448,6 @@ export default function VideoChat({ gender, country, onBack }: Props) {
       </header>
 
       <section className="flex-1 min-h-0 overflow-hidden">
-        {/* MOBILE */}
         <div className="flex lg:hidden flex-col h-full">
           <div className="relative flex-1 min-h-0 border-b border-white/10 bg-black">
             <video
@@ -437,7 +460,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
             />
 
             <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs backdrop-blur-md">
-            {partnerInfo?.gender || 'Desconocido'} · {partnerInfo?.country || 'Sin país'}
+              {partnerLabel}
             </div>
 
             <div className="absolute top-3 right-3 flex gap-2">
@@ -536,7 +559,6 @@ export default function VideoChat({ gender, country, onBack }: Props) {
           </div>
         </div>
 
-        {/* DESKTOP */}
         <div className="hidden lg:grid h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] gap-2 p-2">
           <div className="relative min-w-0 h-full rounded-3xl overflow-hidden border border-white/10 bg-black">
             <video
@@ -563,7 +585,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
             />
 
             <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs">
-              Desconocido
+              {partnerLabel}
             </div>
           </div>
 
