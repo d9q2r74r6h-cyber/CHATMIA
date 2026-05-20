@@ -226,7 +226,7 @@ io.on('connection', (socket) => {
 
     const chatId = activeChats.get(socket.id);
 
-    if (chatId) {
+ /*   if (chatId) {
       await supabase.rpc('increment_message_count', {
         chat_id_input: chatId,
       });
@@ -235,7 +235,7 @@ io.on('connection', (socket) => {
     io.to(partnerId).emit('chat-message', {
       message: cleanMessage,
     });
-  });
+  });*/
 
   socket.on('typing', () => {
     const partnerId = partners.get(socket.id);
