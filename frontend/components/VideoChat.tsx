@@ -50,7 +50,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
 
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [cameraMode] = useState<'user' | 'environment'>('user');
+  const [cameraMode, setCameraMode] = useState<'user' | 'environment'>('user');
 
   const [partnerInfo, setPartnerInfo] = useState<any>(null);
 
@@ -313,6 +313,61 @@ export default function VideoChat({ gender, country, onBack }: Props) {
     setCameraEnabled(enabled);
   };
 
+  const switchCamera = async () => {
+    try {
+      const newMode =
+        cameraMode === 'user'
+          ? 'environment'
+          : 'user';
+  
+      const newStream =
+        await navigator.mediaDevices.getUserMedia({
+          video: {
+            facingMode: newMode,
+          },
+          audio: true,
+        });
+  
+      const newVideoTrack =
+        newStream.getVideoTracks()[0];
+  
+      const oldVideoTrack =
+        streamRef.current?.getVideoTracks()[0];
+  
+      if (
+        peerRef.current &&
+        oldVideoTrack &&
+        newVideoTrack
+      ) {
+        peerRef.current.replaceTrack(
+          oldVideoTrack,
+          newVideoTrack,
+          streamRef.current as MediaStream
+        );
+      }
+  
+      oldVideoTrack?.stop();
+  
+      if (streamRef.current) {
+        streamRef.current.removeTrack(oldVideoTrack!);
+        streamRef.current.addTrack(newVideoTrack);
+      }
+  
+      [
+        localVideoMobile.current,
+        localVideoDesktop.current,
+      ].forEach((video) => {
+        if (video) {
+          video.srcObject = streamRef.current;
+        }
+      });
+  
+      setCameraMode(newMode);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const reportUser = async () => {
     const reason = prompt('¿Por qué deseas reportar este usuario?');
 
@@ -508,6 +563,12 @@ export default function VideoChat({ gender, country, onBack }: Props) {
               >
                 {cameraEnabled ? '📷' : '🚫'}
               </button>
+              <button
+  onClick={switchCamera}
+  className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-lg"
+>
+  🔄
+</button>
             </div>
 
             <div className="absolute bottom-3 left-3 right-3 space-y-2">
