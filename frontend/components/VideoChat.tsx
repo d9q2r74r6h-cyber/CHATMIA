@@ -430,6 +430,7 @@ export default function VideoChat({
               <div className="text-xl font-semibold animate-pulse">
                 Buscando a alguien...
               </div>
+  
               <div className="text-sm text-white/40 mt-2">
                 Conectando alrededor del mundo
               </div>
@@ -438,118 +439,253 @@ export default function VideoChat({
         )}
       </AnimatePresence>
   
+      {/* HEADER */}
       <header className="h-14 shrink-0 border-b border-white/10 bg-black flex items-center justify-between px-4">
-        <div className="font-semibold">ChatMia</div>
+        <div className="font-semibold text-sm md:text-base">
+          ChatMia
+        </div>
   
         <div className="flex items-center gap-2 text-xs">
           <span>{country.flag}</span>
-          <span className="text-white/60">{online} online</span>
+  
+          <span className="text-white/60">
+            {online} online
+          </span>
         </div>
       </header>
   
-      <section className="flex-1 min-h-0 flex flex-col">
-        <div className="relative flex-1 min-h-0 border-b border-white/10 bg-black">
-          <video
-            ref={remoteVideo}
-            autoPlay
-            playsInline
-            muted={false}
-            controls={false}
-            className="w-full h-full object-cover"
-          />
+      {/* CONTENT */}
+      <section className="flex-1 min-h-0 overflow-hidden">
+        {/* MOBILE */}
+        <div className="flex lg:hidden flex-col h-full">
+          {/* REMOTE */}
+          <div className="relative flex-1 border-b border-white/10 bg-black">
+            <video
+              ref={remoteVideo}
+              autoPlay
+              playsInline
+              muted={false}
+              controls={false}
+              className="w-full h-full object-cover"
+            />
   
-          <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs">
-            Desconocido
+            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs backdrop-blur-md">
+              Desconocido
+            </div>
+  
+            <div className="absolute top-3 right-3 flex gap-2">
+              <button
+                onClick={next}
+                className="px-5 py-2 rounded-full bg-white text-black text-sm font-semibold"
+              >
+                Siguiente
+              </button>
+  
+              <button
+                onClick={reportUser}
+                className="px-5 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 text-sm font-semibold backdrop-blur-md"
+              >
+                Reportar
+              </button>
+            </div>
+          </div>
+  
+          {/* LOCAL */}
+          <div className="relative flex-1 bg-black">
+            <video
+              ref={localVideo}
+              autoPlay
+              muted
+              playsInline
+              controls={false}
+              className="w-full h-full object-cover"
+            />
+  
+            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs backdrop-blur-md">
+              Tú
+            </div>
+  
+            {/* CONTROLS */}
+            <div className="absolute top-3 right-3 flex gap-2">
+              <button
+                onClick={toggleMic}
+                className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-lg"
+              >
+                {micEnabled ? '🎤' : '🔇'}
+              </button>
+  
+              <button
+                onClick={toggleCamera}
+                className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-lg"
+              >
+                {cameraEnabled ? '📷' : '🚫'}
+              </button>
+            </div>
+  
+            {/* CHAT OVERLAY */}
+            <div className="absolute bottom-3 left-3 right-3 space-y-2">
+              <div className="max-h-24 overflow-y-auto space-y-1">
+                {messages.slice(-3).map((msg, index) => (
+                  <div
+                    key={`${msg.text}-${index}`}
+                    className={`text-xs px-3 py-2 rounded-2xl max-w-[80%] ${
+                      msg.mine
+                        ? 'ml-auto bg-white text-black'
+                        : 'bg-black/60 text-white'
+                    }`}
+                  >
+                    {msg.text}
+                  </div>
+                ))}
+  
+                {typing && (
+                  <div className="text-xs text-white/60 px-2">
+                    Escribiendo...
+                  </div>
+                )}
+              </div>
+  
+              <div className="flex gap-2">
+                <input
+                  value={message}
+                  onChange={(e) => {
+                    setMessage(e.target.value);
+                    socketRef.current?.emit('typing');
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      sendMessage();
+                    }
+                  }}
+                  placeholder="Mensaje..."
+                  className="flex-1 h-10 rounded-2xl bg-black/60 border border-white/10 px-4 outline-none text-sm"
+                />
+  
+                <button
+                  onClick={sendMessage}
+                  className="px-4 rounded-2xl bg-white text-black text-sm font-medium"
+                >
+                  Enviar
+                </button>
+              </div>
+            </div>
           </div>
         </div>
   
-        <div className="relative flex-1 min-h-0 bg-black">
-          <video
-            ref={localVideo}
-            autoPlay
-            muted
-            playsInline
-            controls={false}
-            className="w-full h-full object-cover"
-          />
+        {/* DESKTOP */}
+        <div className="hidden lg:grid h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] gap-2 p-2">
+          {/* LOCAL VIDEO */}
+          <div className="relative min-w-0 h-full rounded-3xl overflow-hidden border border-white/10 bg-black">
+            <video
+              ref={localVideo}
+              autoPlay
+              muted
+              playsInline
+              controls={false}
+              className="w-full h-full object-cover"
+            />
   
-          <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs">
-            Tú
+            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs">
+              Tú
+            </div>
           </div>
   
-          <div className="absolute top-3 right-3 flex gap-2">
-            <button
-              onClick={toggleMic}
-              className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md"
-            >
-              {micEnabled ? '🎤' : '🔇'}
-            </button>
+          {/* REMOTE VIDEO */}
+          <div className="relative min-w-0 h-full rounded-3xl overflow-hidden border border-white/10 bg-black">
+            <video
+              ref={remoteVideo}
+              autoPlay
+              playsInline
+              controls={false}
+              className="w-full h-full object-cover"
+            />
   
-            <button
-              onClick={toggleCamera}
-              className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md"
-            >
-              {cameraEnabled ? '📷' : '🚫'}
-            </button>
+            <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs">
+              Desconocido
+            </div>
+          </div>
   
-            <button
-              onClick={switchCamera}
-              className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md"
-            >
-              🔄
-            </button>
+          {/* CHAT */}
+          <div className="bg-white/[0.03] border border-white/10 rounded-3xl flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {messages.map((msg, index) => (
+                <div
+                  key={`${msg.text}-${index}`}
+                  className={`text-sm px-3 py-2 rounded-2xl max-w-[85%] ${
+                    msg.mine
+                      ? 'ml-auto bg-white text-black'
+                      : 'bg-white/10 text-white'
+                  }`}
+                >
+                  {msg.text}
+                </div>
+              ))}
+  
+              {typing && (
+                <div className="text-xs text-white/50">
+                  Escribiendo...
+                </div>
+              )}
+            </div>
+  
+            <div className="p-3 border-t border-white/10 flex gap-2">
+              <input
+                value={message}
+                onChange={(e) => {
+                  setMessage(e.target.value);
+                  socketRef.current?.emit('typing');
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    sendMessage();
+                  }
+                }}
+                placeholder="Mensaje..."
+                className="flex-1 h-11 rounded-2xl bg-white/5 border border-white/10 px-4 outline-none"
+              />
+  
+              <button
+                onClick={sendMessage}
+                className="px-5 rounded-2xl bg-white text-black"
+              >
+                Enviar
+              </button>
+            </div>
+  
+            <div className="p-3 border-t border-white/10 flex gap-2 flex-wrap">
+              <button
+                onClick={toggleMic}
+                className="px-4 py-2 rounded-full bg-white/10 border border-white/10"
+              >
+                {micEnabled ? 'Silenciar' : 'Activar mic'}
+              </button>
+  
+              <button
+                onClick={toggleCamera}
+                className="px-4 py-2 rounded-full bg-white/10 border border-white/10"
+              >
+                {cameraEnabled
+                  ? 'Apagar cámara'
+                  : 'Encender cámara'}
+              </button>
+  
+              <button
+                onClick={next}
+                className="px-4 py-2 rounded-full bg-white text-black font-semibold"
+              >
+                Siguiente
+              </button>
+  
+              <button
+                onClick={reportUser}
+                className="px-4 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-300"
+              >
+                Reportar
+              </button>
+            </div>
           </div>
         </div>
       </section>
-  
-      <footer className="shrink-0 border-t border-white/10 bg-black/90 px-3 pt-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
-        <div className="flex gap-2 mb-3">
-          <input
-            value={message}
-            onChange={(e) => {
-              setMessage(e.target.value);
-              socketRef.current?.emit('typing');
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') sendMessage();
-            }}
-            placeholder="Mensaje..."
-            className="flex-1 h-11 rounded-2xl bg-white/10 border border-white/10 px-4 outline-none"
-          />
-  
-          <button
-            onClick={sendMessage}
-            className="px-5 rounded-2xl bg-white text-black font-medium"
-          >
-            Enviar
-          </button>
-        </div>
-  
-        <div className="flex gap-2 overflow-x-auto">
-          <button
-            onClick={next}
-            className="shrink-0 px-6 py-3 rounded-full bg-white text-black font-semibold"
-          >
-            Siguiente
-          </button>
-  
-          <button
-            onClick={reportUser}
-            className="shrink-0 px-6 py-3 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 font-semibold"
-          >
-            Reportar
-          </button>
-  
-          {onBack && (
-            <button
-              onClick={onBack}
-              className="shrink-0 px-6 py-3 rounded-full bg-white/10 border border-white/10 text-white"
-            >
-              Volver
-            </button>
-          )}
-        </div>
-      </footer>
     </main>
   );
 }
