@@ -378,7 +378,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
   };
 
   return (
-    <main className="relative h-screen bg-black text-white flex flex-col overflow-hidden">
+    <main className="relative min-h-[100dvh] bg-black text-white flex flex-col overflow-hidden">
       <AnimatePresence>
         {connecting && (
           <motion.div
@@ -450,7 +450,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
         </div>
       </header>
 
-      <section className="flex-1 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-2 p-2 md:p-3">
+      <section className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-2 p-2 md:p-3 pb-1">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
           <motion.div
             initial={{ opacity: 0, y: 18 }}
@@ -565,8 +565,8 @@ export default function VideoChat({ gender, country, onBack }: Props) {
         </motion.aside>
       </section>
 
-      <footer className="h-28 md:h-20 border-t border-white/10 bg-black/70 backdrop-blur-xl flex items-center justify-center px-3">
-        <div className="flex flex-wrap items-center justify-center gap-3">
+      <footer className="border-t border-white/10 bg-black/80 backdrop-blur-xl px-3 py-3 pb-[calc(env(safe-area-inset-bottom)+12px)]">
+  <div className="flex items-center gap-3 overflow-x-auto whitespace-nowrap">
           <motion.button
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.96 }}
