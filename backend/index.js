@@ -4,26 +4,11 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
-const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
-
-let supabase = null;
-
-if (
-  process.env.SUPABASE_URL &&
-  process.env.SUPABASE_SERVICE_ROLE_KEY
-) {
-  supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-} else {
-  console.warn('Supabase backend variables missing. Active chats disabled.');
-}
 
 app.get('/', (req, res) => {
   res.send('ChatMia server running');
@@ -41,7 +26,6 @@ const io = new Server(server, {
 let waitingSocketId = null;
 
 const partners = new Map();
-const activeChats = new Map();
 const users = new Map();
 
 const messageRateLimit = new Map();
@@ -76,36 +60,10 @@ function removeWaiting(socketId) {
   }
 }
 
-async function closeActiveChat(socketId) {
-  const chatId = activeChats.get(socketId);
-
-  if (!chatId) return;
-
- /* if (supabase) {
-    await supabase
-      .from('active_chats')
-      .update({
-        active: false,
-        ended_at: new Date().toISOString(),
-      })
-      .eq('chat_id', chatId);
-  }
-
-  const partnerId = partners.get(socketId);
-
-  activeChats.delete(socketId);
-
-  if (partnerId) {
-    activeChats.delete(partnerId);
-  }
-}
-
-async function disconnectPair(socketId) {
+function disconnectPair(socketId) {
   const partnerId = partners.get(socketId);
 
   if (!partnerId) return;
-
-  await closeActiveChat(socketId);
 
   partners.delete(socketId);
   partners.delete(partnerId);
@@ -118,7 +76,7 @@ io.on('connection', (socket) => {
 
   emitOnlineCount();
 
-  socket.on('find-partner', async ({ gender, country, email }) => {
+  socket.on('find-partner', ({ gender, country, email }) => {
     console.log('FIND:', socket.id, gender, country?.code);
 
     users.set(socket.id, {
@@ -128,7 +86,7 @@ io.on('connection', (socket) => {
     });
 
     removeWaiting(socket.id);
-    await disconnectPair(socket.id);
+    disconnectPair(socket.id);
 
     if (waitingSocketId && waitingSocketId !== socket.id) {
       const partnerId = waitingSocketId;
@@ -137,35 +95,6 @@ io.on('connection', (socket) => {
       partners.set(socket.id, partnerId);
       partners.set(partnerId, socket.id);
 
-      const chatId = `${socket.id}-${partnerId}-${Date.now()}`;
-
-      activeChats.set(socket.id, chatId);
-      activeChats.set(partnerId, chatId);
-
-      
-      
-      .from('active_chats')
-      .insert({
-        chat_id: chatId,
-        user1_socket: socket.id,
-        user2_socket: partnerId,
-        user1_email: users.get(socket.id)?.email || null,
-        user2_email: users.get(partnerId)?.email || null,
-    user1_country:
-      users.get(socket.id)?.country || null,
-
-    user2_country:
-      users.get(partnerId)?.country || null,
-
-    active: true,
-  })
-  .then(({ error }) => {
-    if (error) {
-      console.error('ACTIVE_CHAT INSERT ERROR:', error);
-    } else {
-      console.log('ACTIVE_CHAT CREATED:', chatId);
-    }
-  });
       console.log('MATCHED:', socket.id, partnerId);
 
       socket.emit('matched', {
@@ -190,15 +119,13 @@ io.on('connection', (socket) => {
     io.to(to).emit('signal', { signal });
   });
 
-  socket.on('chat-message', async ({ message }) => {
+  socket.on('chat-message', ({ message }) => {
     const now = Date.now();
 
     const lastMessage =
       messageRateLimit.get(socket.id) || 0;
 
-    if (now - lastMessage < 1000) {
-      return;
-    }
+    if (now - lastMessage < 1000) return;
 
     messageRateLimit.set(socket.id, now);
 
@@ -213,29 +140,17 @@ io.on('connection', (socket) => {
     if (cleanMessage.length > 300) return;
 
     if (containsBannedWord(cleanMessage)) {
-      console.log(
-        'BLOCKED MESSAGE:',
-        socket.id,
-        cleanMessage
-      );
+      console.log('BLOCKED MESSAGE:', socket.id, cleanMessage);
 
       socket.emit('message-blocked');
 
       return;
     }
 
-    const chatId = activeChats.get(socket.id);
-
- /*   if (chatId) {
-      await supabase.rpc('increment_message_count', {
-        chat_id_input: chatId,
-      });
-    }
-
     io.to(partnerId).emit('chat-message', {
       message: cleanMessage,
     });
-  });*/
+  });
 
   socket.on('typing', () => {
     const partnerId = partners.get(socket.id);
@@ -245,7 +160,7 @@ io.on('connection', (socket) => {
     io.to(partnerId).emit('typing');
   });
 
-  socket.on('next', async () => {
+  socket.on('next', () => {
     console.log('NEXT:', socket.id);
 
     const now = Date.now();
@@ -265,23 +180,17 @@ io.on('connection', (socket) => {
 
     nextRateLimit.set(socket.id, nextData);
 
-    if (nextData.count > 5) {
-      return;
-    }
-
-    await closeActiveChat(socket.id);
+    if (nextData.count > 5) return;
 
     removeWaiting(socket.id);
-    await disconnectPair(socket.id);
+    disconnectPair(socket.id);
   });
 
-  socket.on('disconnect', async () => {
+  socket.on('disconnect', () => {
     console.log('DISCONNECTED:', socket.id);
 
-    await closeActiveChat(socket.id);
-
     removeWaiting(socket.id);
-    await disconnectPair(socket.id);
+    disconnectPair(socket.id);
 
     users.delete(socket.id);
     messageRateLimit.delete(socket.id);
