@@ -143,7 +143,7 @@ io.on('connection', (socket) => {
       activeChats.set(partnerId, chatId);
 
       
-      const { error } = await supabase
+      
       .from('active_chats')
       .insert({
         chat_id: chatId,
