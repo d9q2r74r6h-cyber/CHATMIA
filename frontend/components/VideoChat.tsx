@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import io from 'socket.io-client';
 import Peer from 'simple-peer';
 import { supabase } from '@/lib/supabase';
@@ -24,15 +24,13 @@ type Message = {
   mine: boolean;
 };
 
-export default function VideoChat({
-  gender,
-  country,
-  onBack,
-}: Props) {
+export default function VideoChat({ gender, country, onBack }: Props) {
   const hasTrackedConnection = useRef(false);
 
-  const localVideo = useRef<HTMLVideoElement>(null);
-  const remoteVideo = useRef<HTMLVideoElement>(null);
+  const localVideoMobile = useRef<HTMLVideoElement>(null);
+  const localVideoDesktop = useRef<HTMLVideoElement>(null);
+  const remoteVideoMobile = useRef<HTMLVideoElement>(null);
+  const remoteVideoDesktop = useRef<HTMLVideoElement>(null);
 
   const socketRef = useRef<any>(null);
   const peerRef = useRef<Peer.Instance | null>(null);
@@ -52,9 +50,7 @@ export default function VideoChat({
 
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [cameraMode, setCameraMode] = useState<'user' | 'environment'>(
-    'user'
-  );
+  const [cameraMode] = useState<'user' | 'environment'>('user');
 
   useEffect(() => {
     const checkBan = async () => {
@@ -79,9 +75,26 @@ export default function VideoChat({
       return false;
     };
 
+    const attachLocalStream = (stream: MediaStream) => {
+      [localVideoMobile.current, localVideoDesktop.current].forEach((video) => {
+        if (video) {
+          video.srcObject = stream;
+          video.play().catch(console.error);
+        }
+      });
+    };
+
+    const attachRemoteStream = (stream: MediaStream) => {
+      [remoteVideoMobile.current, remoteVideoDesktop.current].forEach((video) => {
+        if (video) {
+          video.srcObject = stream;
+          video.play().catch(console.error);
+        }
+      });
+    };
+
     (async () => {
       const banned = await checkBan();
-
       if (banned) return;
 
       matchSound.current = new Audio('/sounds/match.mp3');
@@ -109,11 +122,7 @@ export default function VideoChat({
         })
         .then((stream) => {
           streamRef.current = stream;
-
-          if (localVideo.current) {
-            localVideo.current.srcObject = stream;
-            localVideo.current.play().catch(console.error);
-          }
+          attachLocalStream(stream);
 
           socket.emit('find-partner', {
             gender,
@@ -164,11 +173,7 @@ export default function VideoChat({
             });
 
             peer.on('stream', (remoteStream) => {
-              if (remoteVideo.current) {
-                remoteVideo.current.srcObject = remoteStream;
-                remoteVideo.current.play().catch(console.error);
-              }
-
+              attachRemoteStream(remoteStream);
               setConnecting(false);
               setConnected(true);
             });
@@ -204,7 +209,6 @@ export default function VideoChat({
 
           socket.on('typing', () => {
             setTyping(true);
-
             clearTimeout(typingTimeout.current);
 
             typingTimeout.current = setTimeout(() => {
@@ -214,7 +218,6 @@ export default function VideoChat({
 
           socket.on('partner-left', () => {
             hasTrackedConnection.current = false;
-
             cleanupRemote();
 
             setTyping(false);
@@ -230,7 +233,6 @@ export default function VideoChat({
         })
         .catch(() => {
           alert('Debes permitir cámara y micrófono para usar ChatMia.');
-
           setConnecting(false);
           setConnected(false);
         });
@@ -247,9 +249,11 @@ export default function VideoChat({
     peerRef.current?.destroy();
     peerRef.current = null;
 
-    if (remoteVideo.current) {
-      remoteVideo.current.srcObject = null;
-    }
+    [remoteVideoMobile.current, remoteVideoDesktop.current].forEach((video) => {
+      if (video) {
+        video.srcObject = null;
+      }
+    });
   };
 
   const cleanupAll = () => {
@@ -289,8 +293,9 @@ export default function VideoChat({
 
     if (!audioTrack) return;
 
-    audioTrack.enabled = !audioTrack.enabled;
-    setMicEnabled(audioTrack.enabled);
+    const enabled = !audioTrack.enabled;
+    audioTrack.enabled = enabled;
+    setMicEnabled(enabled);
   };
 
   const toggleCamera = () => {
@@ -298,51 +303,9 @@ export default function VideoChat({
 
     if (!videoTrack) return;
 
-    videoTrack.enabled = !videoTrack.enabled;
-    setCameraEnabled(videoTrack.enabled);
-  };
-
-  const switchCamera = async () => {
-    const newMode = cameraMode === 'user' ? 'environment' : 'user';
-
-    try {
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: newMode,
-        },
-        audio: true,
-      });
-
-      const newVideoTrack = newStream.getVideoTracks()[0];
-
-      const oldVideoTrack = streamRef.current?.getVideoTracks()[0];
-
-      if (oldVideoTrack) {
-        oldVideoTrack.stop();
-        streamRef.current?.removeTrack(oldVideoTrack);
-      }
-
-      streamRef.current?.addTrack(newVideoTrack);
-
-      if (localVideo.current && streamRef.current) {
-        localVideo.current.srcObject = streamRef.current;
-        localVideo.current.play().catch(console.error);
-      }
-
-      const sender = (peerRef.current as any)?._pc
-        ?.getSenders()
-        .find((s: RTCRtpSender) => s.track?.kind === 'video');
-
-      if (sender) {
-        await sender.replaceTrack(newVideoTrack);
-      }
-
-      setCameraMode(newMode);
-      setCameraEnabled(true);
-    } catch (error) {
-      console.error(error);
-      alert('No se pudo cambiar la cámara.');
-    }
+    const enabled = !videoTrack.enabled;
+    videoTrack.enabled = enabled;
+    setCameraEnabled(enabled);
   };
 
   const reportUser = async () => {
@@ -420,59 +383,61 @@ export default function VideoChat({
     <main className="relative h-[100dvh] bg-black text-white flex flex-col overflow-hidden">
       <AnimatePresence>
         {connecting && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center"
-          >
+          <div className="absolute inset-0 z-50 bg-black/80 backdrop-blur-xl flex items-center justify-center">
             <div className="text-center">
               <div className="text-xl font-semibold animate-pulse">
                 Buscando a alguien...
               </div>
-  
+
               <div className="text-sm text-white/40 mt-2">
                 Conectando alrededor del mundo
               </div>
             </div>
-          </motion.div>
+          </div>
         )}
       </AnimatePresence>
-  
-      {/* HEADER */}
+
       <header className="h-14 shrink-0 border-b border-white/10 bg-black flex items-center justify-between px-4">
         <div className="font-semibold text-sm md:text-base">
           ChatMia
         </div>
-  
+
         <div className="flex items-center gap-2 text-xs">
           <span>{country.flag}</span>
-  
+
           <span className="text-white/60">
             {online} online
           </span>
+
+          <span
+            className={`px-2 py-1 rounded-full border ${
+              connected
+                ? 'bg-green-500/10 text-green-400 border-green-500/20'
+                : 'bg-yellow-500/10 text-yellow-300 border-yellow-500/20'
+            }`}
+          >
+            {connected ? 'Conectado' : 'Buscando'}
+          </span>
         </div>
       </header>
-  
-      {/* CONTENT */}
+
       <section className="flex-1 min-h-0 overflow-hidden">
         {/* MOBILE */}
         <div className="flex lg:hidden flex-col h-full">
-          {/* REMOTE */}
-          <div className="relative flex-1 border-b border-white/10 bg-black">
+          <div className="relative flex-1 min-h-0 border-b border-white/10 bg-black">
             <video
-              ref={remoteVideo}
+              ref={remoteVideoMobile}
               autoPlay
               playsInline
               muted={false}
               controls={false}
               className="w-full h-full object-cover"
             />
-  
+
             <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs backdrop-blur-md">
               Desconocido
             </div>
-  
+
             <div className="absolute top-3 right-3 flex gap-2">
               <button
                 onClick={next}
@@ -480,7 +445,7 @@ export default function VideoChat({
               >
                 Siguiente
               </button>
-  
+
               <button
                 onClick={reportUser}
                 className="px-5 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-300 text-sm font-semibold backdrop-blur-md"
@@ -489,23 +454,21 @@ export default function VideoChat({
               </button>
             </div>
           </div>
-  
-          {/* LOCAL */}
-          <div className="relative flex-1 bg-black">
+
+          <div className="relative flex-1 min-h-0 bg-black">
             <video
-              ref={localVideo}
+              ref={localVideoMobile}
               autoPlay
               muted
               playsInline
               controls={false}
               className="w-full h-full object-cover"
             />
-  
+
             <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs backdrop-blur-md">
               Tú
             </div>
-  
-            {/* CONTROLS */}
+
             <div className="absolute top-3 right-3 flex gap-2">
               <button
                 onClick={toggleMic}
@@ -513,7 +476,7 @@ export default function VideoChat({
               >
                 {micEnabled ? '🎤' : '🔇'}
               </button>
-  
+
               <button
                 onClick={toggleCamera}
                 className="w-11 h-11 rounded-full bg-black/60 backdrop-blur-md flex items-center justify-center text-lg"
@@ -521,8 +484,7 @@ export default function VideoChat({
                 {cameraEnabled ? '📷' : '🚫'}
               </button>
             </div>
-  
-            {/* CHAT OVERLAY */}
+
             <div className="absolute bottom-3 left-3 right-3 space-y-2">
               <div className="max-h-24 overflow-y-auto space-y-1">
                 {messages.slice(-3).map((msg, index) => (
@@ -537,14 +499,14 @@ export default function VideoChat({
                     {msg.text}
                   </div>
                 ))}
-  
+
                 {typing && (
                   <div className="text-xs text-white/60 px-2">
                     Escribiendo...
                   </div>
                 )}
               </div>
-  
+
               <div className="flex gap-2">
                 <input
                   value={message}
@@ -560,7 +522,7 @@ export default function VideoChat({
                   placeholder="Mensaje..."
                   className="flex-1 h-10 rounded-2xl bg-black/60 border border-white/10 px-4 outline-none text-sm"
                 />
-  
+
                 <button
                   onClick={sendMessage}
                   className="px-4 rounded-2xl bg-white text-black text-sm font-medium"
@@ -571,41 +533,38 @@ export default function VideoChat({
             </div>
           </div>
         </div>
-  
+
         {/* DESKTOP */}
         <div className="hidden lg:grid h-full min-h-0 grid-cols-[minmax(0,1fr)_minmax(0,1fr)_320px] gap-2 p-2">
-          {/* LOCAL VIDEO */}
           <div className="relative min-w-0 h-full rounded-3xl overflow-hidden border border-white/10 bg-black">
             <video
-              ref={localVideo}
+              ref={localVideoDesktop}
               autoPlay
               muted
               playsInline
               controls={false}
               className="w-full h-full object-cover"
             />
-  
+
             <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs">
               Tú
             </div>
           </div>
-  
-          {/* REMOTE VIDEO */}
+
           <div className="relative min-w-0 h-full rounded-3xl overflow-hidden border border-white/10 bg-black">
             <video
-              ref={remoteVideo}
+              ref={remoteVideoDesktop}
               autoPlay
               playsInline
               controls={false}
               className="w-full h-full object-cover"
             />
-  
+
             <div className="absolute bottom-3 left-3 bg-black/60 px-3 py-1 rounded-full text-xs">
               Desconocido
             </div>
           </div>
-  
-          {/* CHAT */}
+
           <div className="bg-white/[0.03] border border-white/10 rounded-3xl flex flex-col overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
               {messages.map((msg, index) => (
@@ -620,14 +579,14 @@ export default function VideoChat({
                   {msg.text}
                 </div>
               ))}
-  
+
               {typing && (
                 <div className="text-xs text-white/50">
                   Escribiendo...
                 </div>
               )}
             </div>
-  
+
             <div className="p-3 border-t border-white/10 flex gap-2">
               <input
                 value={message}
@@ -643,7 +602,7 @@ export default function VideoChat({
                 placeholder="Mensaje..."
                 className="flex-1 h-11 rounded-2xl bg-white/5 border border-white/10 px-4 outline-none"
               />
-  
+
               <button
                 onClick={sendMessage}
                 className="px-5 rounded-2xl bg-white text-black"
@@ -651,7 +610,7 @@ export default function VideoChat({
                 Enviar
               </button>
             </div>
-  
+
             <div className="p-3 border-t border-white/10 flex gap-2 flex-wrap">
               <button
                 onClick={toggleMic}
@@ -659,29 +618,36 @@ export default function VideoChat({
               >
                 {micEnabled ? 'Silenciar' : 'Activar mic'}
               </button>
-  
+
               <button
                 onClick={toggleCamera}
                 className="px-4 py-2 rounded-full bg-white/10 border border-white/10"
               >
-                {cameraEnabled
-                  ? 'Apagar cámara'
-                  : 'Encender cámara'}
+                {cameraEnabled ? 'Apagar cámara' : 'Encender cámara'}
               </button>
-  
+
               <button
                 onClick={next}
                 className="px-4 py-2 rounded-full bg-white text-black font-semibold"
               >
                 Siguiente
               </button>
-  
+
               <button
                 onClick={reportUser}
                 className="px-4 py-2 rounded-full bg-red-500/20 border border-red-500/30 text-red-300"
               >
                 Reportar
               </button>
+
+              {onBack && (
+                <button
+                  onClick={onBack}
+                  className="px-4 py-2 rounded-full bg-white/10 border border-white/10"
+                >
+                  Volver
+                </button>
+              )}
             </div>
           </div>
         </div>
