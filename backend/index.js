@@ -4,12 +4,24 @@ const express = require('express');
 const http = require('http');
 const cors = require('cors');
 const { Server } = require('socket.io');
-
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
+
+let supabase = null;
+
+if (
+  process.env.SUPABASE_URL &&
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+) {
+  supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY
+  );
+}
 
 app.get('/', (req, res) => {
   res.send('ChatMia server running');
@@ -104,12 +116,14 @@ io.on('connection', (socket) => {
         initiator: true,
         partner: users.get(partnerId) || null,
       });
-      
+
       io.to(partnerId).emit('matched', {
         partnerId: socket.id,
         initiator: false,
         partner: users.get(socket.id) || null,
       });
+
+      return;
     }
 
     waitingSocketId = socket.id;
@@ -122,15 +136,6 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chat-message', ({ message }) => {
-    socket.on('reaction', ({ emoji }) => {
-      const partnerId = partners.get(socket.id);
-    
-      if (!partnerId) return;
-    
-      io.to(partnerId).emit('reaction', {
-        emoji,
-      });
-    });
     const now = Date.now();
 
     const lastMessage =
@@ -151,7 +156,11 @@ io.on('connection', (socket) => {
     if (cleanMessage.length > 300) return;
 
     if (containsBannedWord(cleanMessage)) {
-      console.log('BLOCKED MESSAGE:', socket.id, cleanMessage);
+      console.log(
+        'BLOCKED MESSAGE:',
+        socket.id,
+        cleanMessage
+      );
 
       socket.emit('message-blocked');
 
@@ -160,6 +169,39 @@ io.on('connection', (socket) => {
 
     io.to(partnerId).emit('chat-message', {
       message: cleanMessage,
+    });
+
+    if (supabase) {
+      supabase
+        .from('chat_messages')
+        .insert({
+          chat_id: [socket.id, partnerId]
+            .sort()
+            .join('_'),
+
+          sender_socket: socket.id,
+          sender_email:
+            users.get(socket.id)?.email || null,
+          message: cleanMessage,
+        })
+        .then(({ error }) => {
+          if (error) {
+            console.error(
+              'CHAT MESSAGE INSERT ERROR:',
+              error
+            );
+          }
+        });
+    }
+  });
+
+  socket.on('reaction', ({ emoji }) => {
+    const partnerId = partners.get(socket.id);
+
+    if (!partnerId) return;
+
+    io.to(partnerId).emit('reaction', {
+      emoji,
     });
   });
 
