@@ -19,7 +19,11 @@ export default function Page() {
   const [gender, setGender] = useState<string | null>(null);
   const [cameraMode, setCameraMode] =
     useState<'user' | 'environment'>('user');
-  const [country, setCountry] = useState(countries[0]);
+    const [country, setCountry] = useState({
+      code: 'CL',
+      name: 'Chile',
+      flag: '🇨🇱',
+    });
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [entering, setEntering] = useState(false);
@@ -115,7 +119,20 @@ export default function Page() {
     if (profileData) {
       setProfile(profileData);
     }
-
+    try {
+      const response = await fetch('https://ipapi.co/json/');
+      const data = await response.json();
+    
+      const detected = countries.find(
+        (item) => item.code === data.country_code
+      );
+    
+      if (detected) {
+        setCountry(detected);
+      }
+    } catch (err) {
+      console.error(err);
+    }
     setCheckingAuth(false);
   };
 
@@ -266,31 +283,7 @@ export default function Page() {
           </div>
 
           <div>
-            <label className="text-sm text-white/60 block mb-2">
-              País
-            </label>
-
-            <select
-              value={country.code}
-              onChange={(e) => {
-                const selected = countries.find(
-                  (item) => item.code === e.target.value
-                );
-
-                if (selected) setCountry(selected);
-              }}
-              className="w-full h-14 rounded-2xl bg-white/10 border border-white/10 px-4 outline-none text-white"
-            >
-              {countries.map((item) => (
-                <option
-                  key={item.code}
-                  value={item.code}
-                  className="bg-black text-white"
-                >
-                  {item.flag} {item.name}
-                </option>
-              ))}
-            </select>
+           
           </div>
 
           <div className="space-y-2">
