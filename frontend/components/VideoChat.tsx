@@ -339,7 +339,7 @@ export default function VideoChat({
       cleanupAll();
       socketRef.current?.disconnect();
     };
-  }, [gender, country, cameraMode]);
+  }, []);
 
   const cleanupRemote = () => {
     peerRef.current?.destroy();
