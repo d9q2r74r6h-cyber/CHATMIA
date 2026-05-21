@@ -32,6 +32,8 @@ export default function VideoChat({
   onBack,
 }: Props) {
   const hasTrackedConnection = useRef(false);
+  const isManualNext = useRef(false);
+const reconnectTimeout = useRef<any>(null);
 
   const localVideoMobile = useRef<HTMLVideoElement>(null);
   const localVideoDesktop = useRef<HTMLVideoElement>(null);
@@ -294,22 +296,24 @@ export default function VideoChat({
 
         peer.on('error', () => {
           setConnected(false);
-          setConnecting(true);
-        });
         
-        peer.on('close', () => {
-          setConnected(false);
-        });
-
+          if (isManualNext.current) return;
         
-        peer.on('close', () => {
-          setConnected(false);
-          setConnecting(true);
-
-          setTimeout(() => {
+          reconnectTimeout.current = setTimeout(() => {
             next();
-          }, 800);
+          }, 1200);
         });
+        
+        peer.on('close', () => {
+          setConnected(false);
+        
+          if (isManualNext.current) return;
+        
+          reconnectTimeout.current = setTimeout(() => {
+            next();
+          }, 1200);
+        });
+        
 
         clearInterval(remoteStreamTimeout.current);
 
@@ -369,6 +373,8 @@ export default function VideoChat({
   };
 
   const next = () => {
+    isManualNext.current = true;
+clearTimeout(reconnectTimeout.current);
     setRemoteReady(false);
     hasTrackedConnection.current = false;
     setPartnerInfo(null);
