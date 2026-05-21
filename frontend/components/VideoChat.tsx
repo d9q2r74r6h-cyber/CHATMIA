@@ -153,7 +153,7 @@ const lastRemoteTrackTime = useRef(Date.now());
 
             const peer = new Peer({
               initiator,
-              trickle: false,
+              trickle: true,
               stream,
               config: {
                 iceServers: [
