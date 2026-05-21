@@ -17,6 +17,7 @@ const countries = [
 
 export default function Page() {
   const [gender, setGender] = useState<string | null>(null);
+  const [cameraMode, setCameraMode] = useState<'user' | 'environment'>('user');
   const [country, setCountry] = useState(countries[0]);
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -205,7 +206,35 @@ if (profileData) {
               ))}
             </select>
           </div>
+          <div className="space-y-2">
+  <div className="text-sm text-white/60">
+    Cámara
+  </div>
 
+  <div className="grid grid-cols-2 gap-2">
+    <button
+      onClick={() => setCameraMode('user')}
+      className={`h-12 rounded-2xl border ${
+        cameraMode === 'user'
+          ? 'bg-white text-black border-white'
+          : 'bg-white/5 text-white border-white/10'
+      }`}
+    >
+      🤳 Frontal
+    </button>
+
+    <button
+      onClick={() => setCameraMode('environment')}
+      className={`h-12 rounded-2xl border ${
+        cameraMode === 'environment'
+          ? 'bg-white text-black border-white'
+          : 'bg-white/5 text-white border-white/10'
+      }`}
+    >
+      📷 Trasera
+    </button>
+  </div>
+</div>
           <div className="grid grid-cols-1 gap-3">
             <button
               onClick={() => setGender('male')}

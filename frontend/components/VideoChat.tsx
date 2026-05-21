@@ -16,6 +16,7 @@ type Country = {
 type Props = {
   gender: string;
   country: Country;
+  cameraMode: 'user' | 'environment';
   onBack?: () => void;
 };
 
@@ -24,7 +25,12 @@ type Message = {
   mine: boolean;
 };
 
-export default function VideoChat({ gender, country, onBack }: Props) {
+export default function VideoChat({
+  gender,
+  country,
+  cameraMode,
+  onBack,
+}: Props) {
   const hasTrackedConnection = useRef(false);
 
   const localVideoMobile = useRef<HTMLVideoElement>(null);
@@ -50,7 +56,7 @@ export default function VideoChat({ gender, country, onBack }: Props) {
 
   const [micEnabled, setMicEnabled] = useState(true);
   const [cameraEnabled, setCameraEnabled] = useState(true);
-  const [cameraMode, setCameraMode] = useState<'user' | 'environment'>('user');
+  
 
   const [partnerInfo, setPartnerInfo] = useState<any>(null);
 
@@ -315,10 +321,16 @@ export default function VideoChat({ gender, country, onBack }: Props) {
 
   const switchCamera = async () => {
     try {
+      const currentTrack =
+        streamRef.current?.getVideoTracks()[0];
+  
+      const currentFacingMode =
+        currentTrack?.getSettings()?.facingMode;
+  
       const newMode =
-        cameraMode === 'user'
-          ? 'environment'
-          : 'user';
+        currentFacingMode === 'environment'
+          ? 'user'
+          : 'environment';
   
       const newStream =
         await navigator.mediaDevices.getUserMedia({
@@ -361,8 +373,6 @@ export default function VideoChat({ gender, country, onBack }: Props) {
           video.srcObject = streamRef.current;
         }
       });
-  
-      setCameraMode(newMode);
     } catch (err) {
       console.error(err);
     }
