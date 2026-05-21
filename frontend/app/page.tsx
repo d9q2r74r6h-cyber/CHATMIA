@@ -106,10 +106,11 @@ if (profileData) {
   if (gender) {
     return (
       <VideoChat
-        gender={gender}
-        country={country}
-        onBack={() => setGender(null)}
-      />
+      gender={gender}
+      country={country}
+      cameraMode={cameraMode}
+      onBack={() => setGender(null)}
+    />
     );
   }
 
