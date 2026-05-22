@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react';
 import VideoChat from '@/components/VideoChat';
 import { supabase } from '@/lib/supabase';
+import Link from 'next/link';
 
 const countries = [
   { code: 'CL', name: 'Chile', flag: '🇨🇱' },
@@ -226,7 +227,14 @@ export default function Page() {
         >
           Perfil
         </button>
-
+        {profile?.role === 'admin' && (
+  <Link
+    href="/admin/dashboard"
+    className="px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white font-semibold transition"
+  >
+    Admin
+  </Link>
+)}
         <button
           onClick={logout}
           className="h-11 px-5 rounded-2xl bg-red-500/20 border border-red-500/30 text-red-300 font-semibold hover:bg-red-500/30 transition"

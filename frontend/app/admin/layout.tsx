@@ -1,45 +1,49 @@
 'use client';
 
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { createClient } from '@supabase/supabase-js';
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 
 export default function AdminLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const router = useRouter();
+  const pathname = usePathname();
 
-  useEffect(() => {
-    checkAdmin();
-  }, []);
+  const links = [
+    { href: '/admin/dashboard', label: 'Dashboard' },
+    { href: '/admin/users', label: 'Users' },
+    { href: '/admin/reports', label: 'Reports' },
+    { href: '/admin/messages', label: 'Messages' },
+  ];
 
-  async function checkAdmin() {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
+  return (
+    <div className="min-h-screen bg-black text-white flex">
+      <aside className="w-64 border-r border-white/10 bg-zinc-950 p-5 hidden md:block">
+        <h1 className="text-2xl font-bold mb-8">ChatMia Admin</h1>
 
-    if (!user) {
-      router.push('/');
-      return;
-    }
+        <nav className="space-y-2">
+          {links.map((link) => {
+            const active = pathname === link.href;
 
-    const { data: profile } = await supabase
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
+            return (
+              <Link
+                key={link.href}
+                href={link.href}
+                className={`block px-4 py-3 rounded-xl transition ${
+                  active
+                    ? 'bg-pink-600 text-white'
+                    : 'bg-white/5 hover:bg-white/10 text-white/70'
+                }`}
+              >
+                {link.label}
+              </Link>
+            );
+          })}
+        </nav>
+      </aside>
 
-    if (profile?.role !== 'admin') {
-      router.push('/');
-    }
-  }
-
-  return <>{children}</>;
+      <main className="flex-1 min-w-0">{children}</main>
+    </div>
+  );
 }
